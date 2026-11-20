@@ -81,7 +81,7 @@ class MMCT201Temperature:
         prediction = first
         if self._active:
             started_at = self._prediction_started_at
-            minimum_difference = (
+            maximum_difference = (
                 1.5 if started_at is not None and int(now - started_at) > 300 else 1.2
             )
             prediction = max(
@@ -89,7 +89,7 @@ class MMCT201Temperature:
                 110.97539
                 - 4.86445 * first
                 + 0.07764 * first * first
-                + coefficient * max(first - second, minimum_difference),
+                + coefficient * min(first - second, maximum_difference),
             )
 
         self._last_prediction = min(prediction, self._last_prediction + 0.3)

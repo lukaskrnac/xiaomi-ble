@@ -29,7 +29,7 @@ integration aside, restore it before the restart.
 
 The estimate uses the polynomial and both ordered prediction passes observed
 in Miaomiaoce 1.4.2, including the shared increase limiter, time-dependent
-minimum difference and second-channel smoothing. The fork omits the small
+upper limit on T1 − T2 and second-channel smoothing. The fork omits the small
 random perturbations used by the app, uses a per-device sample clock, limits
 duplicate broadcasts, resets on a long sample gap and withholds a new body
 temperature for invalid channels or a first reading at or below 32 °C. For

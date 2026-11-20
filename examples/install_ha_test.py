@@ -91,7 +91,7 @@ def prepare_component(version, destination):
 
         manifest_file = component / "manifest.json"
         manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
-        manifest["version"] = "1.1.0"
+        manifest["version"] = "1.1.1"
         manifest_file.write_text(
             json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
         )
