@@ -2749,13 +2749,26 @@ def test_Xiaomi_MMC_T201_1():
             KEY_TEMPERATURE: SensorValue(
                 name="Temperature",
                 device_key=KEY_TEMPERATURE,
-                native_value=36.87199806168224,
+                native_value=pytest.approx(35.56),
             ),
             KEY_SIGNAL_STRENGTH: SensorValue(
                 name="Signal Strength", device_key=KEY_SIGNAL_STRENGTH, native_value=-60
             ),
         },
     )
+
+
+@pytest.mark.parametrize("invalid", [0x7FF0, 0x7FF1, 0x7FF2])
+@pytest.mark.parametrize("first", [2346, 3526])
+def test_mmc_t201_reports_battery_without_invalid_body_temperature(invalid, first):
+    """An out-of-range marker never produces a temperature entity."""
+    payload = bytes.fromhex("7022db0001f8154a38c1a409002005") + struct.pack(
+        "<hhB", first, invalid, 36
+    )
+    advertisement = bytes_to_service_info(payload, address="A4:C1:38:4A:15:F8")
+    result = XiaomiBluetoothDeviceData().update(advertisement)
+    assert result.entity_values[KEY_BATTERY].native_value == 36
+    assert KEY_TEMPERATURE not in result.entity_values
 
 
 def test_Xiaomi_MMC_W505():
