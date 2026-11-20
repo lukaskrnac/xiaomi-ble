@@ -14,25 +14,12 @@ Use your exact Core version from Settings → About and the correct config path.
 python3 examples/install_ha_test.py 2026.11.2 /config
 ```
 
-To enable compensation for one thermometer, include its MAC and your selected
-reference temperature in Celsius. For example:
-
-```sh
-python3 examples/install_ha_test.py 2026.11.2 /config \
-  --mac A4:C1:38:4A:15:F8 --target 36.5
-```
-
 The installer leaves existing config entries in place and refuses to overwrite
 an existing Xiaomi BLE custom integration. Restart Home Assistant and use the
-existing Xiaomi BLE device and entities. The ESPHome proxy continues forwarding
-the same broadcasts.
-
-For a comparison, log the initial warm-up and readings after the thermometer
-stabilizes. Compensation takes at least 18 minutes after the reading first
-exceeds 32 °C and also depends on the latest 15 samples passing the stability
-check. The reference is configurable in the installed `__init__.py` using
-`mmc_t201_compensation_target`. Omit that argument to disable compensation.
-Restart Home Assistant after changing it.
+existing Xiaomi BLE device. The computed temperature is joined by **Temperature
+T1** and **Temperature T2**, the two unadjusted values in the BLE packet. Each
+invalid channel appears without a numeric reading. The ESPHome proxy continues
+forwarding the same broadcasts.
 
 To revert, move the installed `custom_components/xiaomi_ble` folder out of
 `custom_components` and restart Home Assistant. If you moved an earlier custom
@@ -49,7 +36,3 @@ temperature for invalid channels or a first reading at or below 32 °C. For
 an existing sensor, Home Assistant can continue showing its last valid value.
 Battery updates remain available. This is an experimental port. Agreement
 with the original app requires comparison on the physical thermometer.
-
-Library users can pass `mmc_t201_compensation_target=36.5` to
-`XiaomiBluetoothDeviceData`, or set a reference at runtime with
-`set_mmc_t201_compensation(36.5)`. Passing `None` disables it.

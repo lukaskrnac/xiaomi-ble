@@ -1,37 +1,26 @@
 """Stateful temperature estimate for the MMC-T201 thermometer."""
 
 from collections import deque
-from math import isfinite
-from statistics import mean, pvariance
+from statistics import mean
 
 _INVALID_READING = {0x7FF0, 0x7FF1, 0x7FF2}
 _START_TEMPERATURE = 4.86445 / (2 * 0.07764)
 
 
+def decode_mmc_t201_temperature(raw: int) -> float | None:
+    """Convert a valid thermometer channel to Celsius."""
+    if raw in _INVALID_READING or not 0 < raw <= 5000:
+        return None
+    return raw / 100
+
+
 class MMCT201Temperature:
     """Process unencrypted or decrypted MiBeacon temperature samples."""
 
-    def __init__(self, compensation_target: float | None = None) -> None:
-        self._compensation_samples: deque[float] = deque(maxlen=15)
-        self._compensation_target: float | None = None
-        self._reset_compensation()
-        self.set_compensation(compensation_target)
+    def __init__(self) -> None:
         self._last_packet: tuple[int, bytes] | None = None
         self._last_packet_at = float("-inf")
         self._reset_prediction()
-
-    def set_compensation(self, target: float | None) -> None:
-        """Set a reference temperature in Celsius, or None to disable."""
-        if target is not None and (not isfinite(target) or not 32 <= target <= 42):
-            raise ValueError("MMC-T201 compensation target must be 32–42 °C")
-        if target != self._compensation_target:
-            self._compensation_target = target
-            self._reset_compensation()
-
-    def _reset_compensation(self) -> None:
-        self._compensation_samples.clear()
-        self._compensation_started_at: float | None = None
-        self._compensation_offset: float | None = None
 
     def _reset_prediction(self) -> None:
         self._second_samples: deque[tuple[float, float]] = deque()
@@ -45,27 +34,26 @@ class MMCT201Temperature:
         self._has_cold_sample = False
 
     def update(
-        self, first_raw: int, second_raw: int, packet: tuple[int, bytes], now: float
+        self,
+        first: float | None,
+        second: float | None,
+        packet: tuple[int, bytes],
+        now: float,
     ) -> float | None:
         """Return a body estimate for a new valid sample."""
         if packet == self._last_packet and now - self._last_packet_at < 10:
             return None
         if now - self._last_packet_at > 300:
             self._reset_prediction()
-            self._reset_compensation()
         self._last_packet = packet
         self._last_packet_at = now
 
-        first = first_raw / 100
-        second = second_raw / 100
-        if first_raw in _INVALID_READING or not 0 < first <= 50:
+        if first is None:
             return None
-        if first <= 32:
-            self._reset_compensation()
         if first <= 32 and (self._active or not self._has_cold_sample):
             self._reset_prediction()
             self._has_cold_sample = True
-        if second_raw in _INVALID_READING or not 0 < second <= 50:
+        if second is None:
             return None
 
         if first < 33:
@@ -78,7 +66,7 @@ class MMCT201Temperature:
             return None
         if self._has_cold_sample and self._warming_up and self._stable_samples >= 11:
             primary = self._adjust_stable_temperature(primary, smoothed)
-        return self._apply_compensation(primary, now)
+        return primary
 
     def _predict(
         self, first: float, second: float, coefficient: float, now: float
@@ -150,22 +138,3 @@ class MMCT201Temperature:
         else:
             return fallback
         return self._stable_temperature
-
-    def _apply_compensation(self, prediction: float, now: float) -> float:
-        if self._compensation_target is None:
-            return prediction
-        if self._compensation_started_at is None:
-            if prediction <= 32:
-                return prediction
-            self._compensation_started_at = now
-        if self._compensation_offset is None:
-            self._compensation_samples.append(prediction)
-            if (
-                now - self._compensation_started_at >= 18 * 60
-                and len(self._compensation_samples) == 15
-                and pvariance(self._compensation_samples) <= 0.1
-            ):
-                self._compensation_offset = self._compensation_target - mean(
-                    self._compensation_samples
-                )
-        return prediction + (self._compensation_offset or 0.0)

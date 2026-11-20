@@ -23,6 +23,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESCCM
 from home_assistant_bluetooth import BluetoothServiceInfo
 from sensor_state_data import (
     BinarySensorDeviceClass,
+    DeviceClass,
     SensorLibrary,
     SensorUpdate,
     Units,
@@ -46,7 +47,7 @@ from .devices import (
 )
 from .events import EventDeviceKeys
 from .locks import BLE_LOCK_ACTION, BLE_LOCK_ERROR, BLE_LOCK_METHOD
-from .thermometer import MMCT201Temperature
+from .thermometer import MMCT201Temperature, decode_mmc_t201_temperature
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -2079,15 +2080,10 @@ def decode_temps_probes(packet_value: int) -> float:
 class XiaomiBluetoothDeviceData(BluetoothData):
     """Data for Xiaomi BLE sensors."""
 
-    def __init__(
-        self,
-        bindkey: bytes | None = None,
-        *,
-        mmc_t201_compensation_target: float | None = None,
-    ) -> None:
+    def __init__(self, bindkey: bytes | None = None) -> None:
         super().__init__()
         self.set_bindkey(bindkey)
-        self._mmc_t201 = MMCT201Temperature(mmc_t201_compensation_target)
+        self._mmc_t201 = MMCT201Temperature()
         self._packet_id = 0
 
         # Data that we know how to parse but don't yet map to the SensorData model.
@@ -2120,13 +2116,22 @@ class XiaomiBluetoothDeviceData(BluetoothData):
         # in a regular interval
         self.sleepy_device = False
 
-    def set_mmc_t201_compensation(self, target: float | None) -> None:
-        """Set the reference temperature in Celsius, or disable compensation."""
-        self._mmc_t201.set_compensation(target)
-
     def update_mmc_t201_temperature(self, payload: bytes) -> None:
         """Process an MMC-T201 temperature and battery packet."""
-        first, second, battery = TTB_STRUCT(payload)
+        first_raw, second_raw, battery = TTB_STRUCT(payload)
+        first = decode_mmc_t201_temperature(first_raw)
+        second = decode_mmc_t201_temperature(second_raw)
+        for key, name, value in (
+            ("mmc_t201_t1", "Temperature T1", first),
+            ("mmc_t201_t2", "Temperature T2", second),
+        ):
+            self.update_sensor(
+                key=key,
+                name=name,
+                native_value=value,
+                native_unit_of_measurement=Units.TEMP_CELSIUS,
+                device_class=DeviceClass.TEMPERATURE,
+            )
         self.update_predefined_sensor(SensorLibrary.BATTERY__PERCENTAGE, battery)
         temperature = self._mmc_t201.update(
             first, second, (self._packet_id, payload), monotonic()
